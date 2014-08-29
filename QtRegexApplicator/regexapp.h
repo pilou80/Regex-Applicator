@@ -18,7 +18,7 @@ public:
     
 private:
     Ui::regexapp *ui;
-    QString applyRegex(QTextDocument *document);
+    QString applyRegex(QTextDocument *document, bool save=false);
 
 private slots:
     void handleOriginalTextChange();
@@ -29,8 +29,10 @@ private slots:
     void handleButtonRemoveRegexClicked();
     void handleComboBoxRegexChanged(int);
     void handleEditRegexModifyChanged();
+    void handleCheckBoxPreviewChanged(int);
 
     void handleButtonOpen();
+    void handleButtonSave();
 
 };
 

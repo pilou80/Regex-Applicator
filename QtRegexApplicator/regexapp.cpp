@@ -20,8 +20,10 @@ regexapp::regexapp(QWidget *parent) :
     connect(ui->buttonRemoveRegex, SIGNAL(clicked()), this, SLOT(handleButtonRemoveRegexClicked()));
     connect(ui->editRegexModify, SIGNAL(textChanged(QString)), this, SLOT(handleEditRegexModifyChanged()));
     connect(ui->comboBoxRegex, SIGNAL(currentIndexChanged(int)), this, SLOT(handleComboBoxRegexChanged(int)));
+    connect(ui->checkBoxPreview, SIGNAL(stateChanged(int)), this, SLOT(handleCheckBoxPreviewChanged(int)));
 
     connect(ui->buttonOpen, SIGNAL(clicked()), this, SLOT(handleButtonOpen()));
+    connect(ui->buttonSave, SIGNAL(clicked()), this, SLOT(handleButtonSave()));
 }
 
 regexapp::~regexapp()
@@ -45,7 +47,7 @@ void regexapp::handleRegexedScrollChange(int value)
     ui->textOriginal->verticalScrollBar()->setSliderPosition(value);
 }
 
-QString regexapp::applyRegex(QTextDocument *document)
+QString regexapp::applyRegex(QTextDocument *document, bool save)
 {
     QList<QRegExp *> regexList;
 
@@ -54,10 +56,13 @@ QString regexapp::applyRegex(QTextDocument *document)
         regexList.append(new QRegExp(ui->comboBoxRegex->itemText(i)));
     }
     QString out;
-    out.append("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">");
-    out.append("<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">");
-    out.append("p, li { white-space: pre-wrap; }");
-    out.append("</style></head><body style=\" font-family:'Ubuntu'; font-size:11pt; font-weight:400; font-style:normal;\">");
+    if(!save)
+    {
+        out.append("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">");
+        out.append("<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">");
+        out.append("p, li { white-space: pre-wrap; }");
+        out.append("</style></head><body style=\" font-family:'Ubuntu'; font-size:11pt; font-weight:400; font-style:normal;\">");
+    }
     for(int i=0; i < document->blockCount() ; i++)
     {
         bool regexmatch = false;
@@ -68,17 +73,25 @@ QString regexapp::applyRegex(QTextDocument *document)
                 regexmatch = true;
                 //If the regex capture text we append the captured text
                 if(regex->capturedTexts().count() == 2)
-                   out.append(QString("<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" color:orange;\">%1</span><span style=\" color:green;\">%2</span></p>").arg(regex->capturedTexts().first().remove(regex->capturedTexts().last()).toHtmlEscaped()).arg(regex->capturedTexts().last().toHtmlEscaped()));
+                        if(save)
+                        {
+                            out.append(regex->capturedTexts().last());
+                            out.append("\n");
+                        }
+                        else out.append(QString("<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" color:orange;\">%1</span><span style=\" %2\">%3</span></p>")
+                        .arg(ui->checkBoxPreview->isChecked()?regex->capturedTexts().first().remove(regex->capturedTexts().last()).toHtmlEscaped():"")
+                                                .arg(ui->checkBoxPreview->isChecked()?"color:green;":"")
+                        .arg(regex->capturedTexts().last().toHtmlEscaped()));
                 else
-                   out.append(QString("<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; color:orange;\">%1</p>").arg(regex->capturedTexts().last().toHtmlEscaped()));
+                   if(!save && ui->checkBoxPreview->isChecked()) out.append(QString("<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; color:orange;\">%1</p>").arg(regex->capturedTexts().last().toHtmlEscaped()));
                 break;
             }
         }
-        if(!regexmatch)
+        if(!regexmatch && !save && ui->checkBoxPreview->isChecked())
         {
                out.append(QString("<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; color:red; \">%1</p>").arg(document->findBlockByNumber(i).text().toHtmlEscaped()));
         }
-    out.append("</body></html>");
+    if(!save) out.append("</body></html>");
     }
     qDeleteAll(regexList);
     return out;
@@ -104,6 +117,11 @@ void regexapp::handleComboBoxRegexChanged(int)
     handleOriginalTextChange();
 }
 
+void regexapp::handleCheckBoxPreviewChanged(int)
+{
+    handleOriginalTextChange();
+}
+
 void regexapp::handleEditRegexModifyChanged()
 {
     disconnect(ui->comboBoxRegex, SIGNAL(currentIndexChanged(int)), this, SLOT(handleComboBoxRegexChanged(int)));
@@ -126,6 +144,21 @@ void regexapp::handleButtonOpen()
 
     ui->textOriginal->clear();
     ui->textOriginal->append(QString(file->readAll()));
+
+    file->close();
+
+
+    delete file;
+}
+
+void regexapp::handleButtonSave()
+{
+    QString filename = QFileDialog::getSaveFileName(this, "Save File");
+
+    QFile *file = new QFile(filename);
+    file->open(QIODevice::ReadWrite);
+
+    file->write(applyRegex(ui->textOriginal->document(), true).toLocal8Bit());
 
     file->close();
 
